@@ -208,6 +208,16 @@ const DEFAULT_PLATFORM_CONFIG: PlatformSettings = {
   registrationOpen: true,
 }
 
+const ISSUE_COLOR: Record<string, BadgeColor> = {
+  "Service": "blue",
+  "Tyre": "orange",
+  "Engine": "red",
+  "Oil Change": "violet",
+  "Brake": "yellow",
+  "Accident": "red",
+  "Other": "gray"
+}
+
 // ─── Primitive UI Components ─────────────────────────────────────────────────
 
 type BadgeColor = "green" | "yellow" | "orange" | "red" | "violet" | "blue" | "gray"
