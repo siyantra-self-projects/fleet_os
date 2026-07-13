@@ -1,0 +1,15 @@
+name = "fleet-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fleet_os"
+database_id = "b1bdd7b8-f0c2-4de1-8717-f35e0e7dbe8b"
+
+[vars]
+FRONTEND_URL = "http://localhost:5173"
+
+# Set JWT_SECRET using: wrangler secret put JWT_SECRET
+# Example: wrangler secret put JWT_SECRET
+# Then enter a secure random string

@@ -11,6 +11,7 @@ export default function AlertsPage({
   orders,
   currencySymbol,
   cfg,
+  setCfg,
 }: {
   drivers: Driver[]
   vehicles: Vehicle[]
@@ -20,6 +21,7 @@ export default function AlertsPage({
   onMenu: () => void
   currencySymbol: string
   cfg: AppConfig
+  setCfg: React.Dispatch<React.SetStateAction<AppConfig>>
 }) {
   const fmt = (val: number, symbol: string) => {
     return symbol + val.toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
@@ -32,7 +34,13 @@ export default function AlertsPage({
   })
 
   const saveThresholds = () => {
-    toast.success("Alert thresholds updated successfully")
+    // Update the actual config
+    setCfg(prev => ({
+      ...prev,
+      fuelThreshold: thresholds.fuel,
+      garageThreshold: thresholds.garage,
+    }))
+    toast.success("✓ Alert thresholds saved and applied")
   }
 
   // Compute active system warnings
@@ -98,8 +106,18 @@ export default function AlertsPage({
             <p className="text-xs text-slate-400 font-medium mt-0.5">Customize threshold limits</p>
           </div>
           <div className="space-y-4">
-            <FInput label="Fuel Volume Limit (L)" type="number" value={thresholds.fuel} onChange={e => setForm(f => ({ ...f, fuel: e.target.value }) as any || thresholds) || setThresholds(t => ({ ...t, fuel: e.target.value }))} />
-            <FInput label="Garage Spend Limit (£)" type="number" value={thresholds.garage} onChange={e => setThresholds(t => ({ ...t, garage: e.target.value }))} />
+            <FInput 
+              label="Fuel Volume Limit (L)" 
+              type="number" 
+              value={thresholds.fuel} 
+              onChange={e => setThresholds(t => ({ ...t, fuel: e.target.value }))} 
+            />
+            <FInput 
+              label="Garage Spend Limit (£)" 
+              type="number" 
+              value={thresholds.garage} 
+              onChange={e => setThresholds(t => ({ ...t, garage: e.target.value }))} 
+            />
           </div>
           <Btn onClick={saveThresholds} className="w-full pt-2">Save Parameters</Btn>
         </div>

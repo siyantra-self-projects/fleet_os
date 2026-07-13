@@ -53,6 +53,7 @@ export interface UserAccount {
   companyName: string
   onboarded: boolean
   currency: string
+  role?: "user" | "platform"
   plan?: "Free" | "Premium" | "Enterprise"
   joinedDate?: string
   status?: "Active" | "Suspended"

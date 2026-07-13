@@ -66,7 +66,7 @@ export default function PlatformPage({
     .reduce((sum, p) => sum + p.amount, 0)
 
   // Log new activities helper
-  const addLog = (action: string, level: "info" | "warning" | "danger" | "success" = "info", email = "admin@fleetops.io") => {
+  const addLog = (action: string, level: "info" | "warning" | "danger" | "success" = "info", email = currentUser?.email || "system") => {
     const newLog: PlatformActivityLog = {
       id: "log-" + Math.floor(1000 + Math.random() * 9000),
       date: new Date().toISOString().replace("T", " ").slice(0, 16),
@@ -302,7 +302,7 @@ export default function PlatformPage({
               </div>
               <div className="hidden sm:block text-left">
                 <p className="text-xs font-bold text-slate-700 leading-tight">Lucas Bennett</p>
-                <p className="text-[10px] text-slate-400 font-medium">{currentUser?.email || "admin@fleetops.io"}</p>
+                <p className="text-[10px] text-slate-400 font-medium">{currentUser?.email || "system"}</p>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
             </div>
@@ -575,7 +575,7 @@ export default function PlatformPage({
                   </thead>
                   <tbody className="text-xs font-semibold text-slate-700 divide-y divide-slate-100">
                     {userRows.map((r, i) => {
-                      const isSelf = String(r.email) === "admin@fleetops.io"
+                      const isSelf = String(r.email) === currentUser?.email
                       return (
                         <tr key={String(r.email)} className="hover:bg-slate-50/50 transition-colors group">
                           <td className="py-3.5 pl-6">

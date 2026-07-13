@@ -34,14 +34,52 @@ export default function FinancialPage({
     return { fuel: fCost, garage: gCost, payroll: pCost, revenue, expenses, netProfit, margin }
   }, [fuel, garage, payroll, settlements])
 
-  // Chart data for monthly trend
-  const chartData = [
-    { name: "Jan", Revenue: totals.revenue * 0.15, Expenses: totals.expenses * 0.13 },
-    { name: "Feb", Revenue: totals.revenue * 0.32, Expenses: totals.expenses * 0.28 },
-    { name: "Mar", Revenue: totals.revenue * 0.55, Expenses: totals.expenses * 0.51 },
-    { name: "Apr", Revenue: totals.revenue * 0.78, Expenses: totals.expenses * 0.72 },
-    { name: "May", Revenue: totals.revenue, Expenses: totals.expenses },
-  ]
+  // Chart data for monthly trend - calculate from actual data by month
+  const chartData = useMemo(() => {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    
+    const data = []
+    for (let i = 4; i >= 0; i--) {
+      const targetMonth = currentMonth - i
+      const targetYear = currentYear + Math.floor(targetMonth / 12)
+      const normalizedMonth = ((targetMonth % 12) + 12) % 12
+      
+      // Calculate revenue for this month
+      const monthSettlements = settlements.filter(s => {
+        const date = new Date(s.date)
+        return date.getMonth() === normalizedMonth && date.getFullYear() === targetYear
+      })
+      const monthRevenue = monthSettlements.reduce((sum, s) => sum + s.amount, 0)
+      
+      // Calculate expenses for this month
+      const monthFuel = fuel.filter(f => {
+        const date = new Date(f.date)
+        return date.getMonth() === normalizedMonth && date.getFullYear() === targetYear
+      }).reduce((sum, f) => sum + f.cost, 0)
+      
+      const monthGarage = garage.filter(g => {
+        const date = new Date(g.date)
+        return date.getMonth() === normalizedMonth && date.getFullYear() === targetYear
+      }).reduce((sum, g) => sum + g.cost, 0)
+      
+      const monthPayroll = payroll.filter(p => {
+        const date = new Date(p.date)
+        return date.getMonth() === normalizedMonth && date.getFullYear() === targetYear
+      }).reduce((sum, p) => sum + p.totalPaid, 0)
+      
+      const monthExpenses = monthFuel + monthGarage + monthPayroll
+      
+      data.push({
+        name: monthNames[normalizedMonth],
+        Revenue: monthRevenue,
+        Expenses: monthExpenses
+      })
+    }
+    
+    return data
+  }, [fuel, garage, payroll, settlements])
 
   const pieData = [
     { name: "Fuel Expense", value: totals.fuel, color: "#18181A" },

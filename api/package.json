@@ -1,0 +1,14 @@
+{
+  "name": "fleet-api",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.96.0",
+    "@cloudflare/workers-types": "^4.20250110.0"
+  }
+}

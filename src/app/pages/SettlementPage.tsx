@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react"
-import { Receipt, Plus, Trash2, Search } from "lucide-react"
+import { Receipt, Plus, Trash2, Search, Download, ArrowUpDown } from "lucide-react"
 import { Driver, Vehicle, Route, Settlement, Btn, FInput, Card, SearchableSelect, TopBarComponent, fmt, uid, TODAY } from "../components/UI"
 import { toast } from "sonner"
 
@@ -22,6 +22,10 @@ export default function SettlementPage({
 }) {
   const [search, setSearch] = useState("")
   const [form, setForm] = useState({ date: TODAY, vehicleId: "", driverId: "", routeId: "", amount: "" })
+  const [sortField, setSortField] = useState<"date" | "amount">("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const save = () => {
     if (!form.vehicleId || !form.driverId || !form.routeId || !form.amount) {
@@ -46,6 +50,43 @@ export default function SettlementPage({
     toast.success("Settlement record deleted")
   }
 
+  const handleExport = () => {
+    try {
+      const headers = ["Date", "Vehicle", "Driver", "Route", "Amount"]
+      const csvRows = [headers.join(",")]
+      
+      filtered.forEach(x => {
+        const v = vehicles.find(y => y.id === x.vehicleId)
+        const d = drivers.find(y => y.id === x.driverId)
+        const r = routes.find(y => y.id === x.routeId)
+        csvRows.push([x.date, v ? v.name : "N/A", d ? d.name : "N/A", r ? r.name.replace(/,/g, ";") : "N/A", x.amount].join(","))
+      })
+      
+      const csvString = csvRows.join("\n")
+      const blob = new Blob([csvString], { type: "text/csv" })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `settlements_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Exported ${filtered.length} settlements`)
+    } catch (error) {
+      toast.error("Export failed")
+    }
+  }
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("desc")
+    }
+  }
+
   const driverOptions = useMemo(() => drivers.filter(d => d.status === "Active").map(d => ({ value: d.id, label: d.name })), [drivers])
   const vehicleOptions = useMemo(() => vehicles.filter(v => v.status === "Active").map(v => ({ value: v.id, label: `${v.reg} – ${v.name}` })), [vehicles])
   const routeOptions = useMemo(() => routes.map(r => ({ value: r.id, label: r.name })), [routes])
@@ -57,7 +98,7 @@ export default function SettlementPage({
   }, [settlements])
 
   const filtered = useMemo(() => {
-    return settlements.filter(x => {
+    let result = settlements.filter(x => {
       const driverName = drivers.find(d => d.id === x.driverId)?.name.toLowerCase() ?? ""
       const vehicleReg = vehicles.find(v => v.id === x.vehicleId)?.reg.toLowerCase() ?? ""
       const routeName = routes.find(r => r.id === x.routeId)?.name.toLowerCase() ?? ""
@@ -65,7 +106,22 @@ export default function SettlementPage({
              vehicleReg.includes(search.toLowerCase()) ||
              routeName.includes(search.toLowerCase())
     })
-  }, [settlements, search, drivers, vehicles, routes])
+
+    result.sort((a, b) => {
+      const aVal = sortField === "date" ? new Date(a.date).getTime() : a.amount
+      const bVal = sortField === "date" ? new Date(b.date).getTime() : b.amount
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal
+    })
+
+    return result
+  }, [settlements, search, drivers, vehicles, routes, sortField, sortDirection])
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filtered.slice(start, start + itemsPerPage)
+  }, [filtered, currentPage])
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col bg-[#F0F0F0] select-none">
@@ -97,15 +153,21 @@ export default function SettlementPage({
         <div className="xl:col-span-8 bg-white rounded-3xl p-5 border border-slate-200/60 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-md font-bold text-slate-800 font-sans">Invoices Ledger</h3>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Filter settlements..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-all w-48"
-              />
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Filter settlements..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-all w-48"
+                />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              </div>
+              <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#cfd676] hover:bg-[#b9c063] border border-[#b9c063] rounded-xl text-xs font-bold text-slate-900 transition-all cursor-pointer">
+                <Download className="w-3.5 h-3.5" />
+                <span>Export</span>
+              </button>
             </div>
           </div>
 
@@ -113,21 +175,31 @@ export default function SettlementPage({
             <table className="w-full text-left border-collapse min-w-[650px]">
               <thead>
                 <tr className="text-[10px] font-black uppercase tracking-wider bg-[#18181A] text-white/70">
-                  <th className="py-3 pl-5 rounded-tl-xl">Date</th>
+                  <th className="py-3 pl-5 rounded-tl-xl cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => handleSort("date")}>
+                    <div className="flex items-center gap-1">
+                      Date
+                      {sortField === "date" && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
                   <th className="py-3">Vehicle</th>
                   <th className="py-3">Driver</th>
                   <th className="py-3">Route</th>
-                  <th className="py-3">Gross Amount</th>
+                  <th className="py-3 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => handleSort("amount")}>
+                    <div className="flex items-center gap-1">
+                      Gross Amount
+                      {sortField === "amount" && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
                   <th className="py-3 pr-5 text-right rounded-tr-xl">Action</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-semibold text-slate-700">
-                {filtered.length === 0 ? (
+                {paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-xs font-bold text-slate-400 bg-white">No settlement invoices logged.</td>
                   </tr>
                 ) : (
-                  filtered.map((x, i) => {
+                  paginatedData.map((x, i) => {
                     const v = vehicles.find(y => y.id === x.vehicleId)
                     const d = drivers.find(y => y.id === x.driverId)
                     const r = routes.find(y => y.id === x.routeId)
@@ -176,6 +248,23 @@ export default function SettlementPage({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500 font-semibold">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries
+              </p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-slate-700 transition-all">Previous</button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let page = totalPages <= 5 ? i + 1 : currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i
+                  return <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentPage === page ? "bg-[#cfd676] text-slate-900" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}>{page}</button>
+                })}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-slate-700 transition-all">Next</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

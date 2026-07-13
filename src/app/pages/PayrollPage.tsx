@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react"
-import { Users, Plus, Trash2, Search } from "lucide-react"
+import { Users, Plus, Trash2, Search, Download, ArrowUpDown, Printer } from "lucide-react"
 import { Driver, PayrollEntry, Btn, FInput, Card, SearchableSelect, TopBarComponent, fmt, uid, TODAY } from "../components/UI"
 import { toast } from "sonner"
 
@@ -18,6 +18,10 @@ export default function PayrollPage({
 }) {
   const [search, setSearch] = useState("")
   const [form, setForm] = useState({ week: "W40", date: TODAY, driverId: "", salary: "", bonus: "", advance: "" })
+  const [sortField, setSortField] = useState<"date" | "salary" | "totalPaid">("date")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   const save = () => {
     if (!form.driverId || !form.salary) {
@@ -47,6 +51,46 @@ export default function PayrollPage({
     toast.success("Payroll entry deleted")
   }
 
+  const handleExport = () => {
+    try {
+      const headers = ["Week", "Date", "Driver", "Base Salary", "Bonus", "Advance", "Net Paid"]
+      const csvRows = [headers.join(",")]
+      
+      filtered.forEach(x => {
+        const d = drivers.find(y => y.id === x.driverId)
+        csvRows.push([x.week, x.date, d ? d.name : "N/A", x.salary, x.bonus, x.advance, x.totalPaid].join(","))
+      })
+      
+      const csvString = csvRows.join("\n")
+      const blob = new Blob([csvString], { type: "text/csv" })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `payroll_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Exported ${filtered.length} payroll records`)
+    } catch (error) {
+      toast.error("Export failed")
+    }
+  }
+
+  const handlePrint = () => {
+    window.print()
+    toast.success("Print dialog opened")
+  }
+
+  const handleSort = (field: typeof sortField) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === "asc" ? "desc" : "asc")
+    } else {
+      setSortField(field)
+      setSortDirection("desc")
+    }
+  }
+
   const driverOptions = useMemo(() => drivers.filter(d => d.status === "Active").map(d => ({ value: d.id, label: d.name })), [drivers])
 
   const totals = useMemo(() => {
@@ -56,11 +100,35 @@ export default function PayrollPage({
   }, [payroll])
 
   const filtered = useMemo(() => {
-    return payroll.filter(x => {
+    let result = payroll.filter(x => {
       const driverName = drivers.find(d => d.id === x.driverId)?.name.toLowerCase() ?? ""
       return driverName.includes(search.toLowerCase()) || x.week.toLowerCase().includes(search.toLowerCase())
     })
-  }, [payroll, search, drivers])
+
+    result.sort((a, b) => {
+      let aVal, bVal
+      if (sortField === "date") {
+        aVal = new Date(a.date).getTime()
+        bVal = new Date(b.date).getTime()
+      } else if (sortField === "salary") {
+        aVal = a.salary
+        bVal = b.salary
+      } else {
+        aVal = a.totalPaid
+        bVal = b.totalPaid
+      }
+      return sortDirection === "asc" ? aVal - bVal : bVal - aVal
+    })
+
+    return result
+  }, [payroll, search, drivers, sortField, sortDirection])
+
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage
+    return filtered.slice(start, start + itemsPerPage)
+  }, [filtered, currentPage])
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage)
 
   return (
     <div className="flex-1 overflow-y-auto flex flex-col bg-[#F0F0F0] select-none">
@@ -97,15 +165,25 @@ export default function PayrollPage({
         <div className="xl:col-span-8 bg-white rounded-3xl p-5 border border-slate-200/60 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-md font-bold text-slate-800 font-sans">Payroll Ledger</h3>
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Filter payroll..."
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-all w-48"
-              />
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Filter payroll..."
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-8 pr-4 py-1.5 bg-slate-50 border border-slate-200/70 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-400 transition-all w-48"
+                />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              </div>
+              <button onClick={handlePrint} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 transition-all cursor-pointer">
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print</span>
+              </button>
+              <button onClick={handleExport} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#cfd676] hover:bg-[#b9c063] border border-[#b9c063] rounded-xl text-xs font-bold text-slate-900 transition-all cursor-pointer">
+                <Download className="w-3.5 h-3.5" />
+                <span>Export</span>
+              </button>
             </div>
           </div>
 
@@ -113,22 +191,37 @@ export default function PayrollPage({
             <table className="w-full text-left border-collapse min-w-[600px]">
               <thead>
                 <tr className="text-[10px] font-black uppercase tracking-wider bg-[#18181A] text-white/70">
-                  <th className="py-3 pl-5 rounded-tl-xl">Week</th>
+                  <th className="py-3 pl-5 rounded-tl-xl cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => handleSort("date")}>
+                    <div className="flex items-center gap-1">
+                      Week
+                      {sortField === "date" && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
                   <th className="py-3">Driver</th>
-                  <th className="py-3">Base Salary</th>
+                  <th className="py-3 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => handleSort("salary")}>
+                    <div className="flex items-center gap-1">
+                      Base Salary
+                      {sortField === "salary" && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
                   <th className="py-3">Bonus</th>
                   <th className="py-3">Advance</th>
-                  <th className="py-3">Net Disbursed</th>
+                  <th className="py-3 cursor-pointer hover:bg-zinc-800 transition-colors" onClick={() => handleSort("totalPaid")}>
+                    <div className="flex items-center gap-1">
+                      Net Disbursed
+                      {sortField === "totalPaid" && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
                   <th className="py-3 pr-5 text-right rounded-tr-xl">Action</th>
                 </tr>
               </thead>
               <tbody className="text-xs font-semibold text-slate-700">
-                {filtered.length === 0 ? (
+                {paginatedData.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-xs font-bold text-slate-400 bg-white">No payroll records logged.</td>
                   </tr>
                 ) : (
-                  filtered.map((x, i) => {
+                  paginatedData.map((x, i) => {
                     const d = drivers.find(y => y.id === x.driverId)
                     const rowBg = i % 2 === 0 ? "bg-sky-50/50" : "bg-[#cfd676]/10"
                     return (
@@ -171,6 +264,23 @@ export default function PayrollPage({
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-500 font-semibold">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filtered.length)} of {filtered.length} entries
+              </p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-slate-700 transition-all">Previous</button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let page = totalPages <= 5 ? i + 1 : currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i
+                  return <button key={page} onClick={() => setCurrentPage(page)} className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentPage === page ? "bg-[#cfd676] text-slate-900" : "bg-slate-100 hover:bg-slate-200 text-slate-700"}`}>{page}</button>
+                })}
+                <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-xs font-bold text-slate-700 transition-all">Next</button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

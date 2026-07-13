@@ -22,31 +22,16 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
 
     if (mode === "login") {
       const match = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.passwordVal === password)
-      if (!match && email === "admin@fleetops.io" && password === "admin123") {
-        const defaultAdmin: UserAccount = {
-          email: "admin@fleetops.io",
-          passwordVal: "admin123",
-          companyName: "FleetOps Corporate",
-          onboarded: true,
-          currency: "GBP (£)",
-          plan: "Enterprise",
-          status: "Active",
-          joinedDate: getRelativeDate(30),
-        }
-        localStorage.setItem("fleet_os_users", JSON.stringify([...users, defaultAdmin]))
-        onLoginSuccess(defaultAdmin)
-        toast.success("Welcome back, Administrator!")
-        return
-      }
       if (match) {
         if (match.status === "Suspended") {
           toast.error("Your organization account has been suspended. Please contact platform support.")
           return
         }
-        onLoginSuccess(match)
+        const normalizedMatch = { ...match, role: match.role ?? "user" }
+        onLoginSuccess(normalizedMatch)
         toast.success(`Welcome back, ${match.companyName}!`)
       } else {
-        toast.error("Invalid email or password. Hint: admin@fleetops.io / admin123")
+        toast.error("Invalid email or password.")
       }
     } else {
       if (password.length < 5) { toast.error("Password must be at least 5 characters long"); return }
@@ -60,6 +45,7 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
         companyName,
         onboarded: false,
         currency: "GBP (£)",
+        role: "user",
         plan: "Free",
         status: "Active",
         joinedDate: getRelativeDate(0),
@@ -195,7 +181,7 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 w-4.5 h-4.5 text-slate-450" />
                     <input
                       type="text" required value={companyName} onChange={e => setCompanyName(e.target.value)}
-                      placeholder="Alpha Logistics Ltd"
+                      placeholder="Your organization name"
                       className="w-full pl-11 pr-5 py-3.5 text-sm bg-white/60 border border-[#b9c063]/30 rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#cfd676]/65 focus:border-[#b9c063] focus:bg-white transition-all text-slate-800 placeholder:text-slate-400 font-medium backdrop-blur-sm"
                     />
                   </div>
@@ -263,19 +249,6 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
               }
             </button>
           </div>
-
-          {/* Demo hint */}
-          {mode === "login" && (
-            <div className="flex items-center gap-3.5 p-3.5 bg-white/40 border border-white/55 rounded-2xl">
-              <div className="w-9 h-9 bg-[#18181A] rounded-xl flex items-center justify-center shrink-0">
-                <Zap className="w-4 h-4 text-[#cfd676]" />
-              </div>
-              <div>
-                <p className="text-xs font-bold text-[#18181A]">Quick Demo Access</p>
-                <p className="text-[11px] text-slate-600 font-medium">admin@fleetops.io  ·  admin123</p>
-              </div>
-            </div>
-          )}
 
           {/* Trust badges */}
           <div className="flex items-center justify-center gap-4 pt-1">

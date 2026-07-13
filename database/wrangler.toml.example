@@ -1,0 +1,65 @@
+# Cloudflare Workers Configuration Example
+# Copy this file to your Workers project root and rename to wrangler.toml
+# Then fill in your actual values
+
+name = "fleet-management-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+node_compat = true
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB" # Available in your worker as env.DB
+database_name = "fleet-management-db"
+database_id = "b1bdd7b8-f0c2-4de1-8717-f35e0e7dbe8b"
+
+# Environment Variables (Secrets)
+# Set using: wrangler secret put JWT_SECRET
+# [vars]
+# JWT_SECRET = "your-super-secret-jwt-key-here"
+
+# Development environment
+[env.development]
+name = "fleet-management-api-dev"
+[[env.development.d1_databases]]
+binding = "DB"
+database_name = "fleet-management-db-dev"
+database_id = "b1bdd7b8-f0c2-4de1-8717-f35e0e7dbe8b"
+
+# Production environment
+[env.production]
+name = "fleet-management-api"
+[[env.production.d1_databases]]
+binding = "DB"
+database_name = "fleet-management-db"
+database_id = "b1bdd7b8-f0c2-4de1-8717-f35e0e7dbe8b"
+
+# Routes (optional - if you want custom domain)
+# routes = [
+#   { pattern = "api.yourfleet.com/*", zone_name = "yourfleet.com" }
+# ]
+
+# Workers AI (if using AI features)
+# [ai]
+# binding = "AI"
+
+# KV Namespace (for caching, sessions, etc.)
+# [[kv_namespaces]]
+# binding = "CACHE"
+# id = "YOUR_KV_ID_HERE"
+
+# R2 Storage (for file uploads, backups, etc.)
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "fleet-files"
+
+# Analytics Engine (for logging and analytics)
+# [[analytics_engine_datasets]]
+# binding = "ANALYTICS"
+
+# Build configuration
+[build]
+command = "npm run build"
+
+[build.upload]
+format = "service-worker"

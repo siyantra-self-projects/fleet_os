@@ -1,0 +1,194 @@
+================================================================================
+FLEET MANAGEMENT PLATFORM - DEPLOYMENT GUIDE
+================================================================================
+
+This guide will help you deploy your fleet management platform with Cloudflare
+D1 database and connect it to both local development and Vercel hosting.
+
+================================================================================
+PART 1: DATABASE SETUP (Cloudflare D1)
+================================================================================
+
+1. Apply Database Schema
+   ------------------------
+   cd fleet_os
+   wrangler d1 execute fleet_os --file=database/schema.sql
+
+2. Load Sample Data (Optional)
+   ---------------------------
+   wrangler d1 execute fleet_os --file=database/seed.sql
+
+3. Verify Setup
+   ------------
+   wrangler d1 execute fleet_os --command "SELECT COUNT(*) as count FROM user_accounts"
+
+================================================================================
+PART 2: API DEPLOYMENT (Cloudflare Workers)
+================================================================================
+
+1. Install API Dependencies
+   -----------------------
+   cd api
+   npm install
+
+2. Set JWT Secret
+   -------------
+   wrangler secret put JWT_SECRET
+   (Enter a secure random string, e.g., use: openssl rand -base64 32)
+
+3. Test Locally
+   -----------
+   npm run dev
+   (API will run on http://localhost:8787)
+
+4. Deploy to Cloudflare
+   -------------------
+   npm run deploy
+   
+   Note the deployed URL, something like:
+   https://fleet-api.YOUR-ACCOUNT.workers.dev
+
+================================================================================
+PART 3: FRONTEND SETUP
+================================================================================
+
+1. Install Dependencies
+   -------------------
+   cd ..
+   npm install
+
+2. Configure Environment Variables
+   ------------------------------
+   
+   For LOCAL development:
+   Create .env.local with:
+   VITE_API_URL=http://localhost:8787
+
+   For PRODUCTION (Vercel):
+   Go to Vercel Dashboard → Your Project → Settings → Environment Variables
+   Add: VITE_API_URL = https://fleet-api.YOUR-ACCOUNT.workers.dev
+
+3. Test Locally
+   -----------
+   npm run dev
+   (Frontend will run on http://localhost:5173)
+
+================================================================================
+PART 4: VERCEL DEPLOYMENT
+================================================================================
+
+1. Connect to Vercel
+   ----------------
+   npm install -g vercel
+   vercel login
+   vercel
+
+2. Set Environment Variables in Vercel
+   ----------------------------------
+   Go to: https://vercel.com/dashboard
+   Select your project
+   Settings → Environment Variables
+   
+   Add:
+   - VITE_API_URL = https://fleet-api.YOUR-ACCOUNT.workers.dev
+
+3. Deploy
+   ------
+   vercel --prod
+
+================================================================================
+TESTING THE DEPLOYMENT
+================================================================================
+
+1. Open your Vercel URL (e.g., https://fleet-os.vercel.app)
+
+2. Register a new account:
+   - Email: test@company.com
+   - Password: test123
+   - Company: Test Company
+   - Currency: GBP (£)
+
+3. Complete onboarding by adding:
+   - First driver
+   - First vehicle
+
+4. Test features:
+   - Dashboard loads data from D1
+   - Add/edit/delete drivers → persisted to D1
+   - Add/edit/delete vehicles → persisted to D1
+   - Create orders → persisted to D1
+
+================================================================================
+COMMON COMMANDS
+================================================================================
+
+Development:
+  npm run dev              # Start frontend (localhost:5173)
+  cd api && npm run dev    # Start API (localhost:8787)
+
+Deployment:
+  cd api && npm run deploy # Deploy API to Cloudflare
+  vercel --prod            # Deploy frontend to Vercel
+
+Database:
+  wrangler d1 execute fleet_os --file=database/schema.sql    # Apply schema
+  wrangler d1 execute fleet_os --command "SELECT * FROM user_accounts"  # Query
+
+Logs:
+  cd api && npm run tail   # View API logs in real-time
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Problem: "CORS error" in browser console
+Solution: Make sure your Vercel URL is added to the CORS allow list in api/src/index.ts
+
+Problem: "Database not found"
+Solution: Check wrangler.toml has correct database_id
+
+Problem: "Unauthorized" errors
+Solution: Make sure JWT_SECRET is set: wrangler secret put JWT_SECRET
+
+Problem: API returns 500 errors
+Solution: Check API logs: cd api && npm run tail
+
+================================================================================
+ARCHITECTURE OVERVIEW
+================================================================================
+
+Frontend (React + Vite)
+  ↓ HTTP Requests
+Cloudflare Worker API (api/src/index.ts)
+  ↓ SQL Queries
+Cloudflare D1 Database (fleet_os)
+
+- Frontend hosted on Vercel
+- API hosted on Cloudflare Workers
+- Database hosted on Cloudflare D1
+- Multi-tenant: Each user has isolated data (user_id foreign keys)
+
+================================================================================
+SECURITY CHECKLIST
+================================================================================
+
+✓ JWT tokens for authentication
+✓ Password hashing (upgrade to bcrypt in production)
+✓ Row-level security (all queries filter by user_id)
+✓ CORS configuration
+✓ Environment variables for secrets
+✓ HTTPS everywhere
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Replace simple password hashing with bcrypt
+2. Add rate limiting
+3. Implement password reset flow
+4. Add email notifications
+5. Set up monitoring and alerts
+6. Configure custom domain
+7. Add more API endpoints (fuel, garage, payroll, settlements)
+
+================================================================================

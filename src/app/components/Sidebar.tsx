@@ -73,7 +73,7 @@ export default function Sidebar({ page, setPage, open, setOpen, companyName, use
 
         {/* Categorized Navigation Container */}
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-          {/* Platform Console ONLY for Super Admin */}
+          {/* Platform Console ONLY for platform administrators */}
           {isAdmin && !isImpersonating && (
             <button
               onClick={() => { setPage("platform"); setOpen(false) }}

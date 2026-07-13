@@ -18,56 +18,131 @@ export default function DashboardPage({
   const [activeTab, setActiveTab] = useState<"Pending" | "Responded" | "Assigned" | "Completed">("Assigned")
   const [showAddForm, setShowAddForm] = useState(false)
   const [newOrder, setNewOrder] = useState({ date: TODAY, vehicleId: "", driverId: "", routeId: "" })
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc")
+  const [showDateFilter, setShowDateFilter] = useState(false)
+  const [dateRange, setDateRange] = useState({ start: "", end: "" })
+  const [showSalesFilter, setShowSalesFilter] = useState(false)
+  const [selectedRegions, setSelectedRegions] = useState<string[]>([])
+
+  const vehiclesNeedingService = garage.length
+  const incidentSummary = "Monitor Alerts for incident details"
 
   // 1. KPI Calculations
   const activeVehicles = vehicles.filter(v => v.status === "Active").length
   const utilizationRate = vehicles.length > 0 ? Math.round((activeVehicles / vehicles.length) * 100) : 0
 
   const avgFuelEfficiency = useMemo(() => {
-    if (fuel.length === 0) return 8.7
-    // Compute average mpg or keep close to the 8.7 mpg reference
+    if (fuel.length === 0) return 0
     const totalMiles = fuel.reduce((a, f) => a + f.miles, 0)
     const totalLitres = fuel.reduce((a, f) => a + f.litres, 0)
-    if (totalLitres === 0) return 8.7
-    // conversion factor: MPG = (Miles / Litres) * 4.54609
+    if (totalLitres === 0) return 0
     const mpg = (totalMiles / totalLitres) * 4.546
     return +mpg.toFixed(1)
   }, [fuel])
 
-  // 2. Fulfillment Performance Data
-  const fulfillmentData = useMemo(() => {
-    const currentMonthOrders = orders.length
-    return [
-      { name: "Feb", value: 42, active: false },
-      { name: "Mar", value: 58, active: false },
-      { name: "Apr", value: 65, active: false },
-      { name: "May", value: Math.min(87 + currentMonthOrders, 100), active: true },
-      { name: "Jun", value: 72, active: false },
-      { name: "Jul", value: 60, active: false },
-      { name: "Aug", value: 64, active: false },
-      { name: "Sep", value: 79, active: false },
-      { name: "Oct", value: 83, active: false },
-      { name: "Nov", value: 70, active: false },
-    ]
+  // Calculate on-time delivery rate from completed orders
+  const onTimeRate = useMemo(() => {
+    const completedOrders = orders.filter(o => o.status === "Completed")
+    if (completedOrders.length === 0) return 0
+    // Assume orders completed on or before their date are on-time
+    const onTimeOrders = completedOrders.filter(o => new Date(o.date) <= new Date())
+    return Math.round((onTimeOrders.length / completedOrders.length) * 100)
   }, [orders])
 
-  // 3. Sales Overview Data (Pie/Semi-Donut Chart)
+  // Calculate average idle time from vehicle data (placeholder - would need actual tracking data)
+  const avgIdleTime = useMemo(() => {
+    // This would require actual vehicle tracking data
+    // For now, return empty if no data
+    return vehicles.length > 0 ? "N/A" : "N/A"
+  }, [vehicles])
+
+  // 2. Fulfillment Performance Data - Calculate from actual orders
+  const fulfillmentData = useMemo(() => {
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    const currentMonth = new Date().getMonth()
+    const currentYear = new Date().getFullYear()
+    
+    // Get last 10 months of data
+    const data = []
+    for (let i = 9; i >= 0; i--) {
+      const targetMonth = currentMonth - i
+      const targetYear = currentYear + Math.floor(targetMonth / 12)
+      const normalizedMonth = ((targetMonth % 12) + 12) % 12
+      
+      const monthOrders = orders.filter(o => {
+        const orderDate = new Date(o.date)
+        return orderDate.getMonth() === normalizedMonth && orderDate.getFullYear() === targetYear
+      })
+      
+      const completedInMonth = monthOrders.filter(o => o.status === "Completed").length
+      const totalInMonth = monthOrders.length
+      const completionRate = totalInMonth > 0 ? Math.round((completedInMonth / totalInMonth) * 100) : 0
+      
+      data.push({
+        name: monthNames[normalizedMonth],
+        value: completionRate,
+        active: i === 0 // Current month is active
+      })
+    }
+    
+    // Apply sorting
+    if (sortOrder === "asc") {
+      return [...data].sort((a, b) => a.value - b.value)
+    } else {
+      return [...data].sort((a, b) => b.value - a.value)
+    }
+  }, [orders, sortOrder])
+
+  // 3. Sales Overview Data - Calculate from actual settlements
   const totalRevenue = useMemo(() => {
-    const sum = settlements.reduce((a, s) => a + s.amount, 0)
-    return sum > 50000 ? sum : sum * 50
+    return settlements.reduce((a, s) => a + s.amount, 0)
   }, [settlements])
 
-  const salesData = [
-    { name: "Finland", value: 28, color: "#10B981" },
-    { name: "Sweden", value: 27, color: "#D2D88F" },
-    { name: "Iceland", value: 22, color: "#FFFFFF" },
-    { name: "Estonia", value: 14, color: "#3B82F6" },
-    { name: "Other", value: 9, color: "#94A3B8" },
-  ]
+  const allSalesData = useMemo(() => {
+    // Group settlements by route to get regional data
+    const regionMap = new Map<string, number>()
+    
+    settlements.forEach(s => {
+      const route = routes.find(r => r.id === s.routeId)
+      if (route) {
+        // Extract destination country/region from route name
+        const parts = route.name.split("→")
+        const destination = parts[1]?.trim() || "Other"
+        const country = destination.split(",")[1]?.trim() || "Other"
+        
+        const current = regionMap.get(country) || 0
+        regionMap.set(country, current + s.amount)
+      }
+    })
+    
+    // Convert to percentages
+    const total = Array.from(regionMap.values()).reduce((a, b) => a + b, 0)
+    const colors = ["#10B981", "#D2D88F", "#FFFFFF", "#3B82F6", "#94A3B8", "#F59E0B", "#EC4899"]
+    
+    return Array.from(regionMap.entries())
+      .map(([name, amount], index) => ({
+        name,
+        value: total > 0 ? Math.round((amount / total) * 100) : 0,
+        color: colors[index % colors.length]
+      }))
+      .sort((a, b) => b.value - a.value)
+  }, [settlements, routes])
+
+  // Initialize selected regions with all regions on mount
+  React.useEffect(() => {
+    if (selectedRegions.length === 0 && allSalesData.length > 0) {
+      setSelectedRegions(allSalesData.map(item => item.name))
+    }
+  }, [allSalesData, selectedRegions.length])
+  
+  const salesData = useMemo(() => {
+    if (selectedRegions.length === 0) return allSalesData
+    return allSalesData.filter(item => selectedRegions.includes(item.name))
+  }, [allSalesData, selectedRegions])
 
   // 4. Order Rows Filtering & Rendering
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    let filtered = orders.filter(o => {
       // Search filter
       const driverName = drivers.find(d => d.id === o.driverId)?.name.toLowerCase() ?? ""
       const vehicleReg = vehicles.find(v => v.id === o.vehicleId)?.reg.toLowerCase() ?? ""
@@ -77,22 +152,31 @@ export default function DashboardPage({
                             vehicleReg.includes(searchTerm.toLowerCase()) ||
                             routeName.includes(searchTerm.toLowerCase())
 
+      // Date range filter
+      let matchesDate = true
+      if (dateRange.start || dateRange.end) {
+        const orderDate = new Date(o.date)
+        if (dateRange.start && orderDate < new Date(dateRange.start)) matchesDate = false
+        if (dateRange.end && orderDate > new Date(dateRange.end)) matchesDate = false
+      }
+
       // Tab filter
+      let matchesTab = true
       if (activeTab === "Pending") {
-        return matchesSearch && o.status === "Picked up"
+        matchesTab = o.status === "Picked up"
+      } else if (activeTab === "Responded") {
+        matchesTab = o.status === "Completed"
+      } else if (activeTab === "Assigned") {
+        matchesTab = o.status === "Assigned"
+      } else if (activeTab === "Completed") {
+        matchesTab = o.status === "Completed"
       }
-      if (activeTab === "Responded") {
-        return matchesSearch && o.status === "Completed"
-      }
-      if (activeTab === "Assigned") {
-        return matchesSearch && o.status === "Assigned"
-      }
-      if (activeTab === "Completed") {
-        return matchesSearch && o.status === "Completed"
-      }
-      return matchesSearch
+
+      return matchesSearch && matchesDate && matchesTab
     })
-  }, [orders, drivers, vehicles, routes, searchTerm, activeTab])
+
+    return filtered
+  }, [orders, drivers, vehicles, routes, searchTerm, activeTab, dateRange])
 
   const handleSaveOrder = () => {
     if (!newOrder.vehicleId || !newOrder.driverId || !newOrder.routeId) {
@@ -112,7 +196,47 @@ export default function DashboardPage({
     setNewOrder({ date: TODAY, vehicleId: "", driverId: "", routeId: "" })
   }
 
-  const topDriverName = drivers[0]?.name ?? "Lukas Weber"
+  const handleExportOrders = () => {
+    try {
+      // Create CSV content
+      const headers = ["Order ID", "Date", "Driver", "Vehicle", "Route", "Status"]
+      const csvRows = [headers.join(",")]
+      
+      filteredOrders.forEach(o => {
+        const driver = drivers.find(d => d.id === o.driverId)?.name || "Unassigned"
+        const vehicle = vehicles.find(v => v.id === o.vehicleId)?.reg || "N/A"
+        const route = routes.find(r => r.id === o.routeId)?.name || "N/A"
+        csvRows.push([o.id, o.date, driver, vehicle, route.replace(/,/g, ";"), o.status].join(","))
+      })
+      
+      // Create download
+      const csvString = csvRows.join("\n")
+      const blob = new Blob([csvString], { type: "text/csv" })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `orders_export_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+      
+      toast.success(`Exported ${filteredOrders.length} orders to CSV`)
+    } catch (error) {
+      toast.error("Export failed. Please try again.")
+    }
+  }
+
+  const toggleRegion = (region: string) => {
+    setSelectedRegions(prev => 
+      prev.includes(region) 
+        ? prev.filter(r => r !== region)
+        : [...prev, region]
+    )
+  }
+
+  const topDriverName = drivers.length > 0 ? drivers[0]?.name : "No drivers"
+  const topDriverInitial = topDriverName.charAt(0)
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F0F0F0] min-h-0">
@@ -139,11 +263,11 @@ export default function DashboardPage({
               </div>
               <div className="bg-[#cfd676]/15 border border-[#cfd676]/45 p-4 rounded-2xl flex flex-col justify-between">
                 <span className="text-[10px] font-extrabold text-[#7c8332] uppercase tracking-wider">On-time Rate</span>
-                <span className="text-xl font-extrabold text-slate-900 mt-1">92%</span>
+                <span className="text-xl font-extrabold text-slate-900 mt-1">{onTimeRate}%</span>
               </div>
               <div className="bg-[#cfd676]/15 border border-[#cfd676]/45 p-4 rounded-2xl flex flex-col justify-between">
                 <span className="text-[10px] font-extrabold text-[#7c8332] uppercase tracking-wider">Idle Time</span>
-                <span className="text-xl font-extrabold text-slate-900 mt-1">1h 12m</span>
+                <span className="text-xl font-extrabold text-slate-900 mt-1">{avgIdleTime}</span>
               </div>
             </div>
 
@@ -151,16 +275,20 @@ export default function DashboardPage({
             <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-full bg-slate-800 text-white flex items-center justify-center text-xs font-bold shadow-sm">
-                  {topDriverName.charAt(0)}
+                  {topDriverInitial}
                 </div>
                 <div className="leading-tight">
                   <p className="text-xs font-bold text-slate-800">{topDriverName}</p>
-                  <p className="text-[10px] font-semibold text-slate-400 mt-0.5">Top driver</p>
+                  <p className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                    {drivers.length > 0 ? "Top driver" : "Add a driver"}
+                  </p>
                 </div>
               </div>
-              <span className="bg-emerald-50 text-emerald-700 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-emerald-100">
-                ★ 9.7
-              </span>
+              {drivers.length > 0 && (
+                <span className="bg-slate-100 text-slate-800 text-[10px] font-extrabold px-2.5 py-1 rounded-lg border border-slate-200">
+                  {drivers.length} active driver{drivers.length === 1 ? "" : "s"}
+                </span>
+              )}
             </div>
 
             {/* Navigation rows */}
@@ -171,7 +299,9 @@ export default function DashboardPage({
               >
                 <div className="flex items-center gap-3 text-slate-700">
                   <Wrench className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs font-bold">4 vehicles needing service</span>
+                  <span className="text-xs font-bold">
+                    {vehiclesNeedingService > 0 ? `${vehiclesNeedingService} service records` : "No service records"}
+                  </span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </div>
@@ -182,7 +312,7 @@ export default function DashboardPage({
               >
                 <div className="flex items-center gap-3 text-slate-700">
                   <AlertTriangle className="w-4 h-4 text-slate-400" />
-                  <span className="text-xs font-bold">3 minor incidents this week</span>
+                  <span className="text-xs font-bold">{incidentSummary}</span>
                 </div>
                 <ChevronRight className="w-4 h-4 text-slate-400" />
               </div>
@@ -231,7 +361,7 @@ export default function DashboardPage({
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
-                  onClick={() => toast.success("Orders exported successfully")}
+                  onClick={handleExportOrders}
                   className="flex items-center justify-center gap-1.5 px-4.5 py-2.5 border border-zinc-800 hover:bg-zinc-900 rounded-2xl text-xs font-bold transition-all text-zinc-350 cursor-pointer"
                 >
                   <Share className="w-3.5 h-3.5" />
@@ -254,9 +384,44 @@ export default function DashboardPage({
               <div className="lg:col-span-7 space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Fulfillment Performance</h3>
-                  <div className="flex gap-1.5">
-                    <button className="p-1.5 bg-zinc-900 hover:bg-zinc-850 rounded-lg border border-zinc-800 text-zinc-400 cursor-pointer"><Calendar className="w-3.5 h-3.5" /></button>
-                    <button className="p-1.5 bg-zinc-900 hover:bg-zinc-850 rounded-lg border border-zinc-800 text-zinc-400 cursor-pointer"><ArrowUpDown className="w-3.5 h-3.5" /></button>
+                  <div className="flex gap-1.5 relative">
+                    <button 
+                      onClick={() => setShowDateFilter(!showDateFilter)}
+                      className="p-1.5 bg-zinc-900 hover:bg-zinc-850 rounded-lg border border-zinc-800 text-zinc-400 cursor-pointer"
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                    </button>
+                    {showDateFilter && (
+                      <div className="absolute top-10 right-0 bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow-xl z-20 w-64 space-y-2">
+                        <p className="text-[9px] font-bold text-zinc-400 uppercase">Filter by Date Range</p>
+                        <input
+                          type="date"
+                          value={dateRange.start}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-[10px] text-white"
+                          placeholder="Start date"
+                        />
+                        <input
+                          type="date"
+                          value={dateRange.end}
+                          onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1.5 text-[10px] text-white"
+                          placeholder="End date"
+                        />
+                        <button
+                          onClick={() => setDateRange({ start: "", end: "" })}
+                          className="w-full bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-2 py-1.5 text-[10px] text-white font-bold"
+                        >
+                          Clear Filter
+                        </button>
+                      </div>
+                    )}
+                    <button 
+                      onClick={() => setSortOrder(prev => prev === "asc" ? "desc" : "asc")}
+                      className="p-1.5 bg-zinc-900 hover:bg-zinc-850 rounded-lg border border-zinc-800 text-zinc-400 cursor-pointer"
+                    >
+                      <ArrowUpDown className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
                 <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-bold border-b border-zinc-850 pb-2">
@@ -300,16 +465,42 @@ export default function DashboardPage({
               </div>
 
               {/* Sales Overview Donut */}
-              <div className="lg:col-span-5 space-y-3 bg-zinc-900/50 p-4.5 rounded-2xl border border-zinc-850">
+              <div className="lg:col-span-5 space-y-3 bg-zinc-900/50 p-4.5 rounded-2xl border border-zinc-850 relative">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Sales Overview</h3>
-                  <button className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 cursor-pointer"><SlidersHorizontal className="w-3.5 h-3.5" /></button>
+                  <button 
+                    onClick={() => setShowSalesFilter(!showSalesFilter)}
+                    className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-400 cursor-pointer"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                  </button>
                 </div>
+                
+                {showSalesFilter && (
+                  <div className="absolute top-12 right-4 bg-zinc-900 border border-zinc-800 rounded-xl p-3 shadow-xl z-20 w-48 space-y-2">
+                    <p className="text-[9px] font-bold text-zinc-400 uppercase mb-2">Filter Regions</p>
+                    {allSalesData.map(item => (
+                      <label key={item.name} className="flex items-center gap-2 cursor-pointer hover:bg-zinc-850 p-1.5 rounded">
+                        <input
+                          type="checkbox"
+                          checked={selectedRegions.includes(item.name)}
+                          onChange={() => toggleRegion(item.name)}
+                          className="w-3 h-3 rounded"
+                        />
+                        <span className="text-[10px] text-white font-semibold">{item.name}</span>
+                        <span className="w-2 h-2 rounded-full ml-auto" style={{ backgroundColor: item.color }} />
+                      </label>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-baseline gap-2">
                   <span className="text-2xl font-extrabold text-white tracking-tight">{fmt(totalRevenue, currencySymbol)}</span>
-                  <span className="text-[10px] text-emerald-400 font-extrabold bg-zinc-850 px-2 py-0.5 rounded-md border border-zinc-800 flex items-center">
-                    32.2% ↗
-                  </span>
+                  {settlements.length > 0 && (
+                    <span className="text-[10px] text-emerald-400 font-extrabold bg-zinc-850 px-2 py-0.5 rounded-md border border-zinc-800 flex items-center">
+                      {/* Calculate growth from data if available */}
+                      Revenue
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center justify-center -my-3">
@@ -360,17 +551,17 @@ export default function DashboardPage({
               <div className="flex items-center gap-2">
                 <h3 className="text-md font-bold text-slate-800 font-sans">Orders</h3>
                 <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2.5 py-0.5 rounded-lg border border-slate-200/40">
-                  {orders.length + 260}
+                  {orders.length}
                 </span>
               </div>
 
               {/* Status Tabs capsules */}
               <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200/50 shadow-inner">
                 {([
-                  { label: "Pending", count: orders.filter(o => o.status === "Picked up").length + 69 },
-                  { label: "Responded", count: 85 },
-                  { label: "Assigned", count: orders.filter(o => o.status === "Assigned").length + 51 },
-                  { label: "Completed", count: orders.filter(o => o.status === "Completed").length + 54 }
+                  { label: "Pending", count: orders.filter(o => o.status === "Picked up").length },
+                  { label: "Responded", count: orders.filter(o => o.status === "Completed").length },
+                  { label: "Assigned", count: orders.filter(o => o.status === "Assigned").length },
+                  { label: "Completed", count: orders.filter(o => o.status === "Completed").length }
                 ] as const).map(tab => {
                   const active = activeTab === tab.label
                   return (
