@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { Mail, Lock, Building, Truck, MapPin, Shield, Zap, BarChart3, ArrowRight, Eye, EyeOff, TrendingUp, Users, Globe } from "lucide-react"
 import { toast } from "sonner"
 import { UserAccount, getRelativeDate } from "./UI"
+import api from "../../lib/api"
 
 export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: UserAccount) => void }) {
   const [mode, setMode] = useState<"login" | "signup">("login")
@@ -11,48 +12,56 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
   const [companyName, setCompanyName] = useState("")
   const [showPw, setShowPw] = useState(false)
   const [showCpw, setShowCpw] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email || !password) { toast.error("Please fill in all fields"); return }
     if (!email.includes("@")) { toast.error("Please enter a valid email address"); return }
 
-    const usersRaw = localStorage.getItem("fleet_os_users")
-    const users: UserAccount[] = usersRaw ? JSON.parse(usersRaw) : []
+    setLoading(true)
 
-    if (mode === "login") {
-      const match = users.find(u => u.email.toLowerCase() === email.toLowerCase() && u.passwordVal === password)
-      if (match) {
-        if (match.status === "Suspended") {
-          toast.error("Your organization account has been suspended. Please contact platform support.")
-          return
+    try {
+      if (mode === "login") {
+        const response = await api.login(email, password)
+        
+        if (response.success && response.user) {
+          const normalizedUser = { 
+            ...response.user, 
+            role: response.user.role ?? "user",
+            passwordVal: password 
+          }
+          onLoginSuccess(normalizedUser)
+          toast.success(`Welcome back, ${response.user.companyName}!`)
+        } else {
+          toast.error(response.error || "Invalid email or password.")
         }
-        const normalizedMatch = { ...match, role: match.role ?? "user" }
-        onLoginSuccess(normalizedMatch)
-        toast.success(`Welcome back, ${match.companyName}!`)
       } else {
-        toast.error("Invalid email or password.")
+        if (password.length < 5) { toast.error("Password must be at least 5 characters long"); return }
+        if (password !== confirmPassword) { toast.error("Passwords do not match"); return }
+        if (!companyName) { toast.error("Please specify your Company Name"); return }
+        
+        const response = await api.register(email, password, companyName, "GBP (£)")
+        
+        if (response.success && response.user) {
+          const normalizedUser = { 
+            ...response.user, 
+            role: response.user.role ?? "user",
+            passwordVal: password,
+            joinedDate: getRelativeDate(0),
+            plan: "Free",
+            status: "Active"
+          }
+          onLoginSuccess(normalizedUser)
+          toast.success("Account created successfully! Let's complete onboarding.")
+        } else {
+          toast.error(response.error || "Registration failed. Please try again.")
+        }
       }
-    } else {
-      if (password.length < 5) { toast.error("Password must be at least 5 characters long"); return }
-      if (password !== confirmPassword) { toast.error("Passwords do not match"); return }
-      if (!companyName) { toast.error("Please specify your Company Name"); return }
-      const exists = users.some(u => u.email.toLowerCase() === email.toLowerCase())
-      if (exists) { toast.error("An account with this email already exists"); return }
-      const newUser: UserAccount = {
-        email: email.toLowerCase(),
-        passwordVal: password,
-        companyName,
-        onboarded: false,
-        currency: "GBP (£)",
-        role: "user",
-        plan: "Free",
-        status: "Active",
-        joinedDate: getRelativeDate(0),
-      }
-      localStorage.setItem("fleet_os_users", JSON.stringify([...users, newUser]))
-      onLoginSuccess(newUser)
-      toast.success("Account created successfully! Let's complete onboarding.")
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred. Please try again.")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -223,10 +232,11 @@ export default function AuthPage({ onLoginSuccess }: { onLoginSuccess: (user: Us
 
             <button
               type="submit"
-              className="group w-full py-4 bg-[#18181A] hover:bg-[#2a2a2d] text-white rounded-2xl text-sm font-bold transition-all shadow-lg shadow-black/10 cursor-pointer flex items-center justify-center gap-2"
+              disabled={loading}
+              className="group w-full py-4 bg-[#18181A] hover:bg-[#2a2a2d] text-white rounded-2xl text-sm font-bold transition-all shadow-lg shadow-black/10 cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {mode === "login" ? "Sign In" : "Create Account"}
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              {loading ? "Processing..." : mode === "login" ? "Sign In" : "Create Account"}
+              {!loading && <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />}
             </button>
           </form>
 
