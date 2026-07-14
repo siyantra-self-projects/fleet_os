@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import { Building, SlidersHorizontal, Users, Truck, CheckCircle, MapPin, Calendar, Zap, Globe, Phone, Mail, BriefcaseIcon } from "lucide-react"
 import { toast } from "sonner"
 import { UserAccount, Driver, Vehicle, Btn, FInput, FSelect, uid } from "./UI"
+import api from "../../lib/api"
 
 export default function OnboardingPage({
   currentUser, onOnboardingComplete,
@@ -86,7 +87,7 @@ export default function OnboardingPage({
     }
   }
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     if (!driverName.trim() || !driverLicense.trim()) {
       toast.error("Please complete driver details (Name & License required)")
       return
@@ -113,54 +114,65 @@ export default function OnboardingPage({
       status: "Active",
     }
 
-    // Store additional onboarding data in localStorage for future use
-    const onboardingData = {
-      company: {
-        name: companyName,
-        registration: companyReg,
-        vat: vatNumber,
-        industry,
-      },
-      contact: {
-        person: contactPerson,
-        email: contactEmail,
-        phone: contactPhone,
-      },
-      address: {
-        line1: addressLine1,
-        line2: addressLine2,
-        city,
-        postcode,
-        country,
-      },
-      operations: {
-        currency,
-        weekStart,
-        operatingHours: { start: operatingHoursStart, end: operatingHoursEnd },
-        fleetSize,
-        primaryService,
-        workingDays,
-      },
-      initialAssets: {
-        driver: {
-          ...driverObj,
-          email: driverEmail,
-          address: driverAddress,
-        },
-        vehicle: {
-          ...vehicleObj,
-          year: vehicleYear,
-          capacity: vehicleCapacity,
-          fuelType: vehicleFuelType,
-        },
-      },
-      completedAt: new Date().toISOString(),
+    try {
+      // Save to API
+      const response = await api.completeOnboarding(companyName, currency, driverObj, vehicleObj)
+      
+      if (response.success) {
+        // Store additional onboarding data in localStorage for reference
+        const onboardingData = {
+          company: {
+            name: companyName,
+            registration: companyReg,
+            vat: vatNumber,
+            industry,
+          },
+          contact: {
+            person: contactPerson,
+            email: contactEmail,
+            phone: contactPhone,
+          },
+          address: {
+            line1: addressLine1,
+            line2: addressLine2,
+            city,
+            postcode,
+            country,
+          },
+          operations: {
+            currency,
+            weekStart,
+            operatingHours: { start: operatingHoursStart, end: operatingHoursEnd },
+            fleetSize,
+            primaryService,
+            workingDays,
+          },
+          initialAssets: {
+            driver: {
+              ...driverObj,
+              email: driverEmail,
+              address: driverAddress,
+            },
+            vehicle: {
+              ...vehicleObj,
+              year: vehicleYear,
+              capacity: vehicleCapacity,
+              fuelType: vehicleFuelType,
+            },
+          },
+          completedAt: new Date().toISOString(),
+        }
+
+        localStorage.setItem(`fleet_os_onboarding_${currentUser.email}`, JSON.stringify(onboardingData))
+
+        onOnboardingComplete(companyName, currency, { driver: driverObj, vehicle: vehicleObj })
+        toast.success("🎉 Command center initialized successfully!")
+      } else {
+        toast.error(response.error || "Failed to complete onboarding. Please try again.")
+      }
+    } catch (error: any) {
+      toast.error(error.message || "An error occurred. Please try again.")
     }
-
-    localStorage.setItem(`fleet_os_onboarding_${currentUser.email}`, JSON.stringify(onboardingData))
-
-    onOnboardingComplete(companyName, currency, { driver: driverObj, vehicle: vehicleObj })
-    toast.success("🎉 Command center initialized successfully!")
   }
 
   return (
