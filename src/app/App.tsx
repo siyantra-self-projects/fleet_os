@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react"
 import { Toaster, toast } from "sonner"
+import api from "../lib/api"
 
 import {
   CURRENCY_SYMBOLS,
@@ -123,12 +124,44 @@ export default function App() {
   })
 
 
-  const handleLoginSuccess = (user: UserAccount) => {
+  const handleLoginSuccess = async (user: UserAccount) => {
     const normalizedUser = { ...user, role: user.role ?? "user" }
     setCurrentUser(normalizedUser)
     localStorage.setItem("fleet_os_session", JSON.stringify(normalizedUser))
     setPage(normalizedUser.role === "platform" ? "platform" : "dashboard")
+    
+    // Load user data from API if onboarded
+    if (user.onboarded) {
+      await loadUserData()
+    }
   }
+
+  const loadUserData = async () => {
+    try {
+      // Load all data from API
+      const [driversRes, vehiclesRes, routesRes, ordersRes] = await Promise.all([
+        api.getDrivers(),
+        api.getVehicles(),
+        api.getRoutes(),
+        api.getOrders(),
+      ])
+
+      if (driversRes.success) setDrivers(driversRes.data || [])
+      if (vehiclesRes.success) setVehicles(vehiclesRes.data || [])
+      if (routesRes.success) setRoutes(routesRes.data || [])
+      if (ordersRes.success) setOrders(ordersRes.data || [])
+    } catch (error) {
+      console.error('Failed to load user data:', error)
+      toast.error('Failed to load some data. Please refresh the page.')
+    }
+  }
+
+  // Load data when user logs in
+  useEffect(() => {
+    if (currentUser && currentUser.onboarded) {
+      loadUserData()
+    }
+  }, [currentUser?.email])
 
   const handleLogout = () => {
     setCurrentUser(null)
@@ -138,7 +171,7 @@ export default function App() {
     toast.info("Logged out successfully")
   }
 
-  const handleOnboardingComplete = (
+  const handleOnboardingComplete = async (
     company: string,
     curr: string,
     initialAssets: { driver: Driver; vehicle: Vehicle }
@@ -149,15 +182,13 @@ export default function App() {
     setCurrentUser(updatedUser)
     localStorage.setItem("fleet_os_session", JSON.stringify(updatedUser))
 
-    const usersRaw = localStorage.getItem("fleet_os_users")
-    const usersList: UserAccount[] = usersRaw ? JSON.parse(usersRaw) : []
-    const updatedUsers = usersList.map(u => u.email === currentUser.email ? updatedUser : u)
-    localStorage.setItem("fleet_os_users", JSON.stringify(updatedUsers))
-
+    // Set initial data from onboarding
     setDrivers([initialAssets.driver])
     setVehicles([initialAssets.vehicle])
     setRoutes([])
     setCfg(c => ({ ...c, currency: curr }))
+    
+    toast.success("Onboarding completed! Loading your dashboard...")
   }
 
 
