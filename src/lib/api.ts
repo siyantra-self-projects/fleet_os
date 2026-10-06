@@ -32,29 +32,12 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<ApiResponse<T>> {
-    try {
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        ...options,
-        headers: {
-          ...this.getHeaders(true),
-          ...options.headers,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
-      }
-
-      return data;
-    } catch (error: any) {
-      console.error('API Error:', error);
-      return {
-        success: false,
-        error: error.message || 'Network error',
-      };
+    console.log(`Mocking request to ${endpoint}`, options);
+    // Return empty array for gets, or success for others
+    if (options.method === 'DELETE' || options.method === 'PUT' || options.method === 'POST') {
+        return { success: true, data: {} as T };
     }
+    return { success: true, data: [] as T };
   }
 
   // ============================================
@@ -62,42 +45,33 @@ class ApiClient {
   // ============================================
 
   async register(email: string, password: string, companyName: string, currency: string) {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: this.getHeaders(false),
-      body: JSON.stringify({ email, password, companyName, currency }),
-    });
-    const data = await response.json();
+    const data = { 
+        success: true, 
+        token: 'static_mock_token', 
+        user: { id: 'usr_mock', email, companyName, currency, role: 'admin' } 
+    };
     
-    if (data.success && data.token) {
-      localStorage.setItem('fleet_os_token', data.token);
-      localStorage.setItem('fleet_os_session', JSON.stringify(data.user));
-    }
+    localStorage.setItem('fleet_os_token', data.token);
+    localStorage.setItem('fleet_os_session', JSON.stringify(data.user));
     
     return data;
   }
 
   async login(email: string, password: string) {
-    const response = await fetch(`${API_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: this.getHeaders(false),
-      body: JSON.stringify({ email, password }),
-    });
-    const data = await response.json();
+    const data = { 
+        success: true, 
+        token: 'static_mock_token', 
+        user: { id: 'usr_mock', email, companyName: 'Mock Company', role: 'admin' } 
+    };
     
-    if (data.success && data.token) {
-      localStorage.setItem('fleet_os_token', data.token);
-      localStorage.setItem('fleet_os_session', JSON.stringify(data.user));
-    }
+    localStorage.setItem('fleet_os_token', data.token);
+    localStorage.setItem('fleet_os_session', JSON.stringify(data.user));
     
     return data;
   }
 
   async completeOnboarding(companyName: string, currency: string, driver: any, vehicle: any) {
-    return this.request('/api/auth/onboarding', {
-      method: 'POST',
-      body: JSON.stringify({ companyName, currency, driver, vehicle }),
-    });
+    return { success: true };
   }
 
   logout() {
